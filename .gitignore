@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+Thumbs.db
+# local experiment outputs (committed samples live in demo/samples/)
+outputs/
+*.tmp.wav
+
