@@ -4,8 +4,9 @@ Run from the repo root:
 
     python app/app.py
 
-First launch downloads the voice model (~145 MB); afterwards it works
-fully offline.
+The model is warmed up at startup so the first click is fast. First
+launch downloads the voice model (~145 MB); afterwards it works fully
+offline.
 """
 
 from __future__ import annotations
@@ -18,12 +19,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import gradio as gr  # noqa: E402
 
-from app.kachin_tts import SAMPLE_RATE, speak  # noqa: E402
+from app.kachin_tts import SAMPLE_RATE, speak, warm_up  # noqa: E402
 
 TITLE = "Kachin GPT -- Jinghpaw Text-to-Speech"
 
 DESCRIPTION = """
 Type a sentence in **Kachin (Jingpho)** and hear it spoken aloud.
+
+**Verbatim by design:** this tool reads exactly the text you give it --
+no words are generated or changed.
 
 Voice model: [`facebook/mms-tts-kac`](https://huggingface.co/facebook/mms-tts-kac)
 from Meta's Massively Multilingual Speech project -- one of the only neural
@@ -80,5 +84,7 @@ def build_demo() -> "gr.Blocks":
 
 
 if __name__ == "__main__":
+    print("Loading the Kachin voice model (first run downloads ~145 MB)...")
+    warm_up()
+    print("Model ready -- launching interface.")
     build_demo().launch()
-
