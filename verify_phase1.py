@@ -6,10 +6,11 @@ Proves every claim the README makes about the core pipeline:
     1. All modules compile cleanly.
     2. The empty-input guard rejects blank text (no model required).
     3. The text chunker behaves (pure function, no model required).
-    4. speak() returns valid 16 kHz int16 audio with real signal.
+    4. The vocabulary guard flags characters the voice cannot say.
+    5. speak() returns valid 16 kHz int16 audio with real signal.
 
 Run:  python verify_phase1.py          (full check; downloads model on first run)
-      python verify_phase1.py --fast   (skips model inference -- checks 1-3 only)
+      python verify_phase1.py --fast   (skips model inference -- checks 1-4 only)
 """
 
 from __future__ import annotations
@@ -34,7 +35,15 @@ def main() -> int:
     fast = "--fast" in sys.argv
 
     # 1. Modules compile
-    for module in ["app/kachin_tts.py", "app/app.py", "verify_phase1.py"]:
+    modules = [
+        "app/kachin_tts.py",
+        "app/app.py",
+        "tools/speak_file.py",
+        "sft/recording-kit/check_recording.py",
+        "llm/ollama_client.py",
+        "verify_phase1.py",
+    ]
+    for module in modules:
         path = REPO_ROOT / module
         try:
             py_compile.compile(str(path), doraise=True)
@@ -42,7 +51,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             check(f"compile: {module}", False, str(exc))
 
-    from app.kachin_tts import SAMPLE_RATE, chunk_text, speak
+    from app.kachin_tts import SAMPLE_RATE, chunk_text, speak, unsupported_chars
 
     # 2. Empty-input guard (works without the ML stack)
     for bad_input in ["", "   ", "\n\t"]:
@@ -59,7 +68,23 @@ def main() -> int:
     check("chunker splits long text", len(chunks) >= 2, f"{len(chunks)} chunks")
     check("chunker handles empty text", chunk_text("   ") == [])
 
-    # 4. Real synthesis
+    # 4. Vocabulary guard (pure logic; real tokenizer wired in check_text)
+    vocab = set("kaji?")
+    check("vocab guard passes covered text", unsupported_chars("Kaja ai i?", vocab) == [])
+    check(
+        "vocab guard flags unknown chars",
+        unsupported_chars("Kaja 123", vocab) == ["1", "2", "3"],
+    )
+
+    # 4b. Assistant grounding is honest when nothing is verified
+    sys.path.insert(0, str(REPO_ROOT / "llm"))
+    from ollama_client import build_grounding_block
+    check(
+        "assistant grounding admits limits with no verified terms",
+        "native speaker" in build_grounding_block([]).lower(),
+    )
+
+    # 5. Real synthesis
     if fast:
         print("\n--fast: skipping model inference checks.")
     else:
@@ -78,6 +103,9 @@ def main() -> int:
             int(np.abs(audio).max()) > 500,
             f"peak amplitude {int(np.abs(audio).max())}",
         )
+        audio_a, _ = speak("Kaja ai i?", seed=7)
+        audio_b, _ = speak("Kaja ai i?", seed=7)
+        check("seeded synthesis is reproducible", bool(np.array_equal(audio_a, audio_b)))
 
     failed = [r for r in RESULTS if not r[1]]
     print("\n" + "=" * 50)
@@ -93,4 +121,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
