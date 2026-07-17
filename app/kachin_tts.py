@@ -9,11 +9,14 @@ Design notes:
       tested -- without the ML stack installed.
     - ``speak()`` is the single public synthesis entry point. Everything
       it claims is checked by ``verify_phase1.py`` and ``tests/``.
+    - Verbatim by design: this module reads exactly the text it is given.
+      No text is generated, expanded, or altered.
 """
 
 from __future__ import annotations
 
 import re
+import warnings
 import wave
 from pathlib import Path
 
@@ -54,6 +57,34 @@ def chunk_text(text: str, max_chars: int = 200) -> list[str]:
     return chunks
 
 
+def unsupported_chars(text: str, vocab: set[str]) -> list[str]:
+    """Characters in ``text`` not covered by ``vocab`` (case-tolerant).
+
+    Whitespace is ignored. Pure function -- unit tested without the
+    model; ``check_text()`` supplies the real tokenizer vocabulary.
+    """
+    missing = []
+    for ch in text:
+        if ch.isspace():
+            continue
+        if ch in vocab or ch.lower() in vocab:
+            continue
+        missing.append(ch)
+    return sorted(set(missing))
+
+
+def check_text(text: str) -> list[str]:
+    """Best-effort list of characters the voice model will likely skip.
+
+    The MMS tokenizer silently drops characters outside its alphabet,
+    which produces subtly wrong audio. This surfaces the problem instead
+    of hiding it. Loads the tokenizer on first call.
+    """
+    _, tokenizer = _load()
+    vocab = set(tokenizer.get_vocab().keys())
+    return unsupported_chars(text, vocab)
+
+
 def _load():
     """Load and cache the MMS Kachin model + tokenizer (first call only)."""
     if "model" not in _MODEL_CACHE:
@@ -75,6 +106,13 @@ def _load():
     return _MODEL_CACHE["model"], _MODEL_CACHE["tokenizer"]
 
 
+def warm_up() -> None:
+    """Load the model and run one short synthesis so the first real
+    request is fast. Call at app startup."""
+    _load()
+    _synthesize_chunk("a")
+
+
 def _synthesize_chunk(text: str) -> np.ndarray:
     """Synthesize one chunk of Kachin text -> float waveform in [-1, 1]."""
     import torch
@@ -86,11 +124,15 @@ def _synthesize_chunk(text: str) -> np.ndarray:
     return waveform.squeeze().cpu().numpy()
 
 
-def speak(text: str) -> tuple[np.ndarray, int]:
+def speak(text: str, seed: int | None = None) -> tuple[np.ndarray, int]:
     """Synthesize Kachin speech from text.
 
     Args:
         text: Kachin (Jingpho) text in Latin script.
+        seed: Optional random seed. The VITS duration predictor is
+            stochastic, so the same text normally produces slightly
+            different audio each run; pass a seed for reproducible
+            output (same text + seed + library versions -> same audio).
 
     Returns:
         (audio, sample_rate): 16-bit PCM waveform as an int16 numpy
@@ -98,9 +140,26 @@ def speak(text: str) -> tuple[np.ndarray, int]:
 
     Raises:
         ValueError: if ``text`` is empty or whitespace-only.
+
+    Warns:
+        UserWarning: if the text contains characters outside the voice
+        model's alphabet (they would be silently skipped by the model).
     """
     if not text or not text.strip():
         raise ValueError("Input text is empty -- nothing to synthesize.")
+
+    missing = check_text(text)
+    if missing:
+        warnings.warn(
+            "These characters are outside the voice model's alphabet and "
+            f"will likely be skipped: {missing}",
+            stacklevel=2,
+        )
+
+    if seed is not None:
+        import torch
+
+        torch.manual_seed(seed)
 
     chunks = chunk_text(text)
     pause = np.zeros(int(_CHUNK_PAUSE_S * SAMPLE_RATE), dtype=np.float32)
@@ -116,9 +175,9 @@ def speak(text: str) -> tuple[np.ndarray, int]:
     return audio_int16, SAMPLE_RATE
 
 
-def save_wav(text: str, path: str | Path) -> Path:
+def save_wav(text: str, path: str | Path, seed: int | None = None) -> Path:
     """Synthesize ``text`` and write a 16-bit mono WAV file to ``path``."""
-    audio, rate = speak(text)
+    audio, rate = speak(text, seed=seed)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as wav_file:
@@ -127,4 +186,3 @@ def save_wav(text: str, path: str | Path) -> Path:
         wav_file.setframerate(rate)
         wav_file.writeframes(audio.tobytes())
     return path
-
