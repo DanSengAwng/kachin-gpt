@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kachin GPT — In-Browser Voice</title>
+<style>
+  :root {
+    --navy: #1A2940; --blue: #2E6FA8; --amber: #E8A020;
+    --bg: #f7f9fb; --card: #ffffff; --line: #dbe4ec; --muted: #5A6A7A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; background: var(--bg); color: var(--navy);
+    line-height: 1.5; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 18px 60px; }
+  header h1 { font-size: 26px; margin: 12px 0 4px; }
+  header p.tag { color: var(--muted); margin: 0 0 4px; }
+  .badge {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    color: #fff; background: var(--blue); padding: 3px 10px; border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .verbatim { background: #eef5fb; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; color: var(--navy); margin: 16px 0; }
+  .verbatim b { color: var(--blue); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; margin: 16px 0; box-shadow: 0 1px 3px rgba(26,41,64,.05); }
+  label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  textarea { width: 100%; min-height: 96px; font-size: 17px; padding: 12px;
+    border: 1.5px solid var(--line); border-radius: 10px; resize: vertical;
+    font-family: inherit; }
+  textarea:focus { outline: none; border-color: var(--blue); }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip { font-size: 14px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    background: #eef2f6; border: 1px solid var(--line); color: var(--navy); }
+  .chip:hover { background: #e2e9f0; }
+  button.speak { margin-top: 14px; width: 100%; font-size: 17px; font-weight: 700;
+    color: #fff; background: var(--blue); border: none; border-radius: 10px;
+    padding: 14px; cursor: pointer; }
+  button.speak:disabled { background: #9db6cc; cursor: not-allowed; }
+  .status { font-size: 14px; color: var(--muted); margin-top: 12px; min-height: 20px; }
+  .bar { height: 6px; background: #e6edf3; border-radius: 4px; overflow: hidden;
+    margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0%; background: var(--amber); transition: width .2s; }
+  audio { width: 100%; margin-top: 14px; display: none; }
+  a.dl { display: none; font-size: 14px; margin-top: 10px; color: var(--blue); }
+  footer { font-size: 12px; color: var(--muted); margin-top: 28px; text-align: center; }
+  footer a { color: var(--blue); }
+  code { background: #eef2f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="badge">Runs in your browser</span>
+    <h1>Kachin GPT — Voice</h1>
+    <p class="tag">Type Kachin (Jinghpaw), hear it spoken. No server, no install.</p>
+  </header>
+
+  <div class="verbatim">
+    <b>Verbatim by design.</b> This reads exactly the text you give it — no words
+    are generated or changed. The entire voice model runs on <b>your device</b>;
+    after the first load it works offline.
+  </div>
+
+  <div class="card">
+    <label for="text">Kachin text</label>
+    <textarea id="text" placeholder="Type Jinghpaw text here...">Chyeju kaba sai.</textarea>
+    <div class="examples" id="examples"></div>
+    <button class="speak" id="speak">Load voice &amp; speak</button>
+    <div class="bar" id="bar"><div id="barfill"></div></div>
+    <div class="status" id="status">The voice model downloads once (about 40&ndash;70&nbsp;MB), then is cached for offline use.</div>
+    <audio id="audio" controls></audio>
+    <a class="dl" id="dl" download="kachin.wav">Download this audio (.wav)</a>
+  </div>
+
+  <p class="note">
+    Seed phrases are common greetings pending native-speaker review. Voice model:
+    Meta MMS (<code>mms-tts-kac</code>), converted to run in-browser.
+  </p>
+
+  <footer>
+    Phase 4 preview &middot;
+    <a href="https://github.com/DanSengAwng/kachin-gpt" target="_blank" rel="noopener">Source on GitHub</a>
+    &middot; Every language deserves a digital voice.
+  </footer>
+</div>
+
+<script type="module">
+  import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0";
+
+  // ---- Configuration ---------------------------------------------------------
+  // Point this at the Kachin ONNX model once you have converted and uploaded it
+  // to your Hugging Face account (see web/README.md). Until then, you can prove
+  // this whole app works TODAY by leaving the English fallback below.
+  const KACHIN_MODEL  = "DanSengAwng/mms-tts-kac-onnx";  // <-- your model (after upload)
+  const ENGLISH_TEST  = "Xenova/mms-tts-eng";            // <-- works right now, for testing
+  const MODEL_ID = KACHIN_MODEL;   // swap to ENGLISH_TEST to test the app shell today
+  // ---------------------------------------------------------------------------
+
+  env.allowLocalModels = false;  // load from the HF Hub / CDN
+
+  const EXAMPLES = ["Chyeju kaba sai.", "Kaja ai i?", "Kaja ai."];
+  const $ = (id) => document.getElementById(id);
+  let tts = null;
+
+  // Seed example chips
+  const exWrap = $("examples");
+  for (const phrase of EXAMPLES) {
+    const chip = document.createElement("span");
+    chip.className = "chip"; chip.textContent = phrase;
+    chip.onclick = () => { $("text").value = phrase; };
+    exWrap.appendChild(chip);
+  }
+
+  function setStatus(msg) { $("status").textContent = msg; }
+  function showBar(show) { $("bar").style.display = show ? "block" : "none"; }
+  function setBar(pct) { $("barfill").style.width = pct + "%"; }
+
+  async function ensureModel() {
+    if (tts) return tts;
+    showBar(true);
+    setStatus("Loading the Kachin voice model (first time only)...");
+    tts = await pipeline("text-to-speech", MODEL_ID, {
+      progress_callback: (p) => {
+        if (p.status === "progress" && p.total) {
+          const pct = Math.round((p.loaded / p.total) * 100);
+          setBar(pct);
+          setStatus(`Downloading voice model: ${pct}%`);
+        }
+      },
+    });
+    showBar(false);
+    setStatus("Voice ready. It is now cached for offline use.");
+    return tts;
+  }
+
+  // Float32 waveform -> 16-bit PCM WAV blob (so it plays and downloads anywhere)
+  function encodeWav(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+    writeStr(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true);
+    writeStr(8, "WAVE"); writeStr(12, "fmt "); view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    writeStr(36, "data"); view.setUint32(40, samples.length * 2, true);
+    let off = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2;
+    }
+    return new Blob([view], { type: "audio/wav" });
+  }
+
+  async function speak() {
+    const text = $("text").value.trim();
+    if (!text) { setStatus("Please type some Kachin text first."); return; }
+    $("speak").disabled = true;
+    try {
+      const model = await ensureModel();
+      setStatus("Synthesizing...");
+      const out = await model(text);
+      const blob = encodeWav(out.audio, out.sampling_rate);
+      const url = URL.createObjectURL(blob);
+      const audio = $("audio");
+      audio.src = url; audio.style.display = "block"; audio.play();
+      const dl = $("dl"); dl.href = url; dl.style.display = "inline-block";
+      setStatus("Done. Press play, or download the .wav to share.");
+    } catch (err) {
+      console.error(err);
+      setStatus("Could not load the voice. If the Kachin model is not uploaded yet, "
+        + "see web/README.md, or switch MODEL_ID to the English test model.");
+    } finally {
+      $("speak").disabled = false;
+      $("speak").textContent = "Speak";
+    }
+  }
+
+  $("speak").addEventListener("click", speak);
+</script>
+</body>
+</html>
+
