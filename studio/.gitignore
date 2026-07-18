@@ -1,0 +1,4 @@
+# The corpus is the fine-tuner's own voice data + consent-gated recordings.
+# It stays local by design and must never be committed.
+corpus/
+
