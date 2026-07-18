@@ -13,3 +13,6 @@ Thumbs.db
 outputs/
 *.tmp.wav
 
+
+studio/corpus/
+.venv-convert/
