@@ -41,3 +41,9 @@ ruff check .                     # lint
 `facebook/mms-tts-kac` · VITS · 16 kHz · lang code `kac` · license
 CC-BY-NC 4.0 (non-commercial — code is MIT separately).
 
+## Read these first (agent handoff)
+
+- `BLUEPRINT.md` -- system map, 8 invariants, decision log. Invariants are non-negotiable.
+- `AGENT_LOOP.md` -- the work protocol for local/weaker models: one task, one test, one commit.
+- `BACKLOG.md` -- specced tasks. Local-model-safe tasks are marked; acceptance tests already exist skip-marked in `tests/test_backlog_tasks.py`.
+
