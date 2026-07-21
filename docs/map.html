@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kachin GPT — The Whole Machine</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg:#faf8f4; --card:#ffffff; --border:#e5e0d6; --ink:#22262b; --muted:#6d7480;
+    --green:#1a7f37; --green-soft:#e4f3e8;
+    --amber:#a06a00; --amber-soft:#fdf2d7;
+    --red:#b04a2f;  --red-soft:#fbe9e2;
+    --blue:#0b62c4; --blue-soft:#e6f0fb;
+    --gray:#8a8f98;
+    --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  * { box-sizing:border-box; margin:0; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif; padding:24px 18px 80px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+
+  h1 { font-size:26px; letter-spacing:-.4px; }
+  h1 em { color:var(--red); font-style:normal; }
+  .sub { color:var(--muted); margin-top:4px; max-width:760px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:12px; color:var(--muted); }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .sw { width:14px; height:14px; border-radius:4px; display:inline-block; }
+  .sw.g { background:var(--green-soft); border:2px solid var(--green); }
+  .sw.a { background:var(--amber-soft); border:2px solid var(--amber); }
+  .sw.f { background:#fff; border:2px dashed var(--gray); }
+  .sw.p { background:var(--blue-soft); border:2px solid var(--blue); }
+
+  h2 { font-size:17px; margin:34px 0 6px; }
+  h2 small { font-weight:500; color:var(--muted); font-size:12.5px; margin-left:8px; }
+
+  /* pressure points */
+  .pushes { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin-top:10px; }
+  .push { background:var(--card); border:1px solid var(--border); border-top:4px solid var(--amber); border-radius:12px; padding:12px 14px; cursor:pointer; transition:transform .12s; }
+  .push:hover { transform:translateY(-2px); }
+  .push.now { border-top-color:var(--green); }
+  .push .tag { font-size:10.5px; font-weight:800; letter-spacing:.6px; color:var(--amber); }
+  .push.now .tag { color:var(--green); }
+  .push b { display:block; font-size:14px; margin:3px 0 2px; }
+  .push .eff { font-size:11.5px; color:var(--muted); }
+  .push .unl { font-size:12.5px; margin-top:6px; }
+  .push .unl::before { content:"→ "; color:var(--red); font-weight:700; }
+
+  /* map */
+  #map { position:relative; margin-top:14px; }
+  #wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+  .band { position:relative; z-index:2; background:transparent; border:1px dashed var(--border); border-radius:16px; padding:14px 16px 10px; margin-bottom:26px; }
+  .band > h3 { font-size:13px; letter-spacing:.4px; text-transform:uppercase; }
+  .band > h3 .line-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; }
+  .band > p.bandsub { font-size:12px; color:var(--muted); margin:2px 0 12px; }
+  .row { display:flex; flex-wrap:wrap; gap:34px 46px; align-items:flex-start; }
+  .node { width:138px; background:var(--card); border:2px solid var(--border); border-radius:12px; padding:9px 10px 8px; cursor:pointer; transition:box-shadow .12s, transform .12s; position:relative; z-index:2; }
+  .node:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-1px); }
+  .node.sel { box-shadow:0 0 0 3px rgba(176,74,47,.35); }
+  .node .ico { font-size:20px; }
+  .node b { display:block; font-size:12.5px; line-height:1.25; margin-top:3px; }
+  .node .ns { font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.3; }
+  .node .chip { position:absolute; top:-9px; right:8px; font-size:9px; font-weight:800; letter-spacing:.4px; padding:2px 7px; border-radius:999px; background:var(--card); }
+  .node.st-built  { border-color:var(--green); background:linear-gradient(#fff,#fbfdf9); }
+  .node.st-built .chip { color:var(--green); border:1.5px solid var(--green); background:var(--green-soft); }
+  .node.st-wait   { border-color:var(--amber); }
+  .node.st-wait .chip { color:var(--amber); border:1.5px solid var(--amber); background:var(--amber-soft); }
+  .node.st-future { border-style:dashed; border-color:var(--gray); background:#fdfdfb; }
+  .node.st-future .chip { color:var(--gray); border:1.5px dashed var(--gray); }
+  .node.st-people { border-color:var(--blue); background:linear-gradient(#fff,#f7fafe); }
+  .node.st-people .chip { color:var(--blue); border:1.5px solid var(--blue); background:var(--blue-soft); }
+
+  /* rails */
+  .rails { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:2px; }
+  .rail { background:#f2efe8; border:1px solid var(--border); border-radius:10px; padding:10px 12px; cursor:pointer; }
+  .rail:hover { background:#ecebe2; }
+  .rail b { font-size:12.5px; display:block; }
+  .rail span { font-size:11.5px; color:var(--muted); }
+
+  /* detail panel */
+  #panel { position:fixed; right:14px; top:70px; width:330px; max-height:calc(100vh - 100px); overflow:auto; background:var(--card); border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 34px rgba(0,0,0,.14); padding:16px 18px; z-index:50; display:none; }
+  #panel.open { display:block; }
+  #panel .close { position:absolute; top:8px; right:10px; border:none; background:none; font-size:18px; color:var(--muted); cursor:pointer; }
+  #panel h4 { font-size:15.5px; display:flex; gap:8px; align-items:center; padding-right:20px; }
+  #panel .chips { display:flex; gap:6px; margin:8px 0 10px; flex-wrap:wrap; }
+  #panel .pc { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:999px; }
+  #panel .path { font-family:var(--mono); font-size:11px; color:var(--muted); word-break:break-all; margin-bottom:10px; }
+  #panel .sec { font-size:11px; font-weight:800; letter-spacing:.5px; color:var(--muted); margin-top:10px; }
+  #panel p.body { font-size:13px; margin-top:3px; }
+  #panel .pushp { background:var(--amber-soft); border:1px solid #ecd9a0; border-radius:9px; padding:8px 11px; font-size:12.5px; margin-top:4px; }
+  #panel .pushp.done { background:var(--green-soft); border-color:#bfdec7; }
+
+  /* ladder */
+  .ladder { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin-top:10px; }
+  .rung { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:13px 15px; }
+  .rung h4 { font-size:13px; }
+  .rung h4 span { display:inline-block; font-size:10px; font-weight:800; padding:1px 8px; border-radius:999px; margin-right:6px; vertical-align:1px; }
+  .rung ul { margin:8px 0 0 16px; font-size:12.5px; }
+  .rung li { margin-bottom:5px; }
+  .rung li.dim { color:var(--muted); }
+  .arrowlbl { font-size:11px; fill:#555; }
+
+  .foot { margin-top:30px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); padding-top:12px; }
+  @media (max-width:760px) { #panel { left:10px; right:10px; width:auto; top:auto; bottom:10px; max-height:55vh; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Kachin GPT — <em>the whole machine on one page</em></h1>
+  <div class="sub">Every part of what we're building, how the pieces feed each other, and — most importantly — the few places where <b>your</b> effort unlocks everything downstream. Click any box for a plain-language explanation.</div>
+  <div class="legend">
+    <span><i class="sw g"></i> Built &amp; tested — works today</span>
+    <span><i class="sw a"></i> Built, waiting on a person</span>
+    <span><i class="sw f"></i> Future — specced, not built</span>
+    <span><i class="sw p"></i> People</span>
+  </div>
+</header>
+
+<h2>Where to push <small>ranked by what each hour of your time unlocks</small></h2>
+<div class="pushes">
+  <div class="push" data-node="gate">
+    <div class="tag">PUSH 1 · ~1 HOUR</div><b>Sit with an elder, verify the termbank</b>
+    <div class="eff">13 rows to review + numerals 1–1000 spoken forms</div>
+    <div class="unl">The assistant starts citing <b>trusted</b> words, and number-reading (T03) becomes possible</div>
+  </div>
+  <div class="push" data-node="onnx">
+    <div class="tag">PUSH 2 · ~15 MIN + UPLOAD</div><b>Run the ONNX conversion, upload to HF</b>
+    <div class="eff">bash web/convert_to_onnx.sh on your PC</div>
+    <div class="unl">The public web demo starts <b>speaking Kachin</b> to anyone on earth — then the domain is worth pointing</div>
+  </div>
+  <div class="push" data-node="corpus">
+    <div class="tag">PUSH 3 · AFTERNOONS</div><b>Feed recordings through the studio</b>
+    <div class="eff">Voice actor is already producing raw audio</div>
+    <div class="unl">At 60 min / 2 speakers the fine-tune run unlocks → a voice that sounds like <b>your community</b></div>
+  </div>
+  <div class="push now" data-node="loop">
+    <div class="tag">PUSH 4 · TONIGHT, FREE</div><b>Point your local model at the repo</b>
+    <div class="eff">Ollama agent + AGENT_LOOP.md, no cost</div>
+    <div class="unl">T01, T02, T06 get built while you sleep — the tests referee it, not the model</div>
+  </div>
+</div>
+
+<h2>The machine <small>three lines, one system — arrows show what feeds what</small></h2>
+<div id="map">
+  <svg id="wires"></svg>
+
+  <div class="band" id="band-speak">
+    <h3><span class="line-dot" style="background:var(--green)"></span>Line 1 · SPEAK — works today</h3>
+    <p class="bandsub">Type Kachin, hear Kachin. The sacred rule: the voice reads <b>exactly</b> what is written — no AI ever rewrites the text. That is the trust contract for scripture.</p>
+    <div class="row">
+      <div class="node st-people" id="n-you"><span class="chip">PEOPLE</span><div class="ico">👤</div><b>You / any speaker</b><div class="ns">types or pastes Kachin text</div></div>
+      <div class="node st-future" id="n-normalize"><span class="chip">FUTURE</span><div class="ico">🔢</div><b>Number reader</b><div class="ns">T03 · "25" → Kachin words</div></div>
+      <div class="node st-built" id="n-guard"><span class="chip">BUILT</span><div class="ico">🛡️</div><b>Spell-guard</b><div class="ns">warns if a letter isn't in the voice's alphabet</div></div>
+      <div class="node st-built" id="n-engine"><span class="chip">BUILT</span><div class="ico">🔊</div><b>Voice engine</b><div class="ns">Meta MMS Kachin model · reads verbatim</div></div>
+      <div class="node st-built" id="n-audio"><span class="chip">BUILT</span><div class="ico">🎧</div><b>Audio out</b><div class="ns">16 kHz WAV, play or save</div></div>
+      <div class="node st-built" id="n-app"><span class="chip">BUILT</span><div class="ico">🖥️</div><b>Desktop app</b><div class="ns">one-box Gradio UI</div></div>
+      <div class="node st-built" id="n-batch"><span class="chip">BUILT</span><div class="ico">📄</div><b>Batch converter</b><div class="ns">whole documents → audio files</div></div>
+      <div class="node st-wait" id="n-onnx"><span class="chip">YOUR 15 MIN</span><div class="ico">📦</div><b>Model converter</b><div class="ns">H03 · makes the voice run in browsers</div></div>
+      <div class="node st-wait" id="n-webdemo"><span class="chip">LIVE·WAITING</span><div class="ico">🌐</div><b>Public web demo</b><div class="ns">GitHub Pages · speaks after H03</div></div>
+    </div>
+  </div>
+
+  <div class="band" id="band-words">
+    <h3><span class="line-dot" style="background:var(--amber)"></span>Line 2 · WORDS — the trust pipeline</h3>
+    <p class="bandsub">How Kachin words become <b>trusted</b> data. AI may draft and fetch — but only a native speaker's approval turns anything into "verified". The machine is forbidden to fake this.</p>
+    <div class="row">
+      <div class="node st-people" id="n-learner"><span class="chip">PEOPLE</span><div class="ico">👥</div><b>Fine-tuners &amp; students</b><div class="ns">ask questions in the studio chat</div></div>
+      <div class="node st-wait" id="n-termbank"><span class="chip">0/13 VERIFIED</span><div class="ico">📚</div><b>Termbank</b><div class="ns">community dictionary with a verified flag</div></div>
+      <div class="node st-built" id="n-retrieve"><span class="chip">BUILT</span><div class="ico">🔎</div><b>Retrieval</b><div class="ns">BM25 search · verified rows rank higher</div></div>
+      <div class="node st-built" id="n-assistant"><span class="chip">BUILT</span><div class="ico">🤖</div><b>Local assistant</b><div class="ns">Ollama · free &amp; offline · admits unknowns</div></div>
+      <div class="node st-wait" id="n-gate"><span class="chip">HUMANS ONLY</span><div class="ico">✅</div><b>Native-speaker gate</b><div class="ns">H01 · an elder approves — or it stays unverified</div></div>
+    </div>
+  </div>
+
+  <div class="band" id="band-voice">
+    <h3><span class="line-dot" style="background:var(--red)"></span>Line 3 · VOICE — making it sound like us</h3>
+    <p class="bandsub">Today the model speaks with a stranger's tone (it learned from New Testament recordings). This line replaces that with your community's own voice — recordings never leave your computer.</p>
+    <div class="row">
+      <div class="node st-people" id="n-actor"><span class="chip">PEOPLE</span><div class="ico">🎙️</div><b>Voice actor</b><div class="ns">recording raw audio now</div></div>
+      <div class="node st-built" id="n-kit"><span class="chip">BUILT</span><div class="ico">📋</div><b>Recording kit</b><div class="ns">session guide · consent forms · quality checker</div></div>
+      <div class="node st-built" id="n-studio"><span class="chip">BUILT</span><div class="ico">🎚️</div><b>Fine-tuning studio</b><div class="ns">local web app · drag-drop → auto-check</div></div>
+      <div class="node st-wait" id="n-corpus"><span class="chip">0 / 60 MIN</span><div class="ico">🔒</div><b>Voice corpus</b><div class="ns">consent-gated · stays on your machine</div></div>
+      <div class="node st-future" id="n-finetune"><span class="chip">FUTURE</span><div class="ico">🧪</div><b>Fine-tune run</b><div class="ns">H04 · free Colab GPU · runbook pinned</div></div>
+      <div class="node st-future" id="n-tuned"><span class="chip">FUTURE</span><div class="ico">✨</div><b>Community voice v2</b><div class="ns">judged by native ears (blind MOS)</div></div>
+    </div>
+  </div>
+
+  <h2 style="margin-top:6px">The guard rails <small>why a cheap local model can safely build on this</small></h2>
+  <div class="rails">
+    <div class="rail" id="n-tests"><b>🧪 36 tests + CI on every commit</b><span>30 passing · 6 are "goalposts" waiting for future tasks</span></div>
+    <div class="rail" id="n-verify"><b>📏 14 claim-checks</b><span>every README claim has a script that proves it</span></div>
+    <div class="rail" id="n-invariants"><b>⛔ 8 unbreakable rules</b><span>verbatim speech · no fabricated Kachin · corpus stays local…</span></div>
+    <div class="rail" id="n-loop"><b>🔁 Agent loop</b><span>local AI works one task at a time; the tests are the referee</span></div>
+  </div>
+</div>
+
+<h2>What unlocks what <small>the same machine, seen as a ladder</small></h2>
+<div class="ladder">
+  <div class="rung">
+    <h4><span style="background:var(--green-soft);color:var(--green)">TODAY</span>Working now</h4>
+    <ul>
+      <li>Type Kachin → hear it, verbatim (app + batch)</li>
+      <li>Studio ready for recordings, chat grounded honestly</li>
+      <li>Web demo live — but speaking its English test voice</li>
+      <li class="dim">Assistant has zero <i>verified</i> words to cite</li>
+    </ul>
+  </div>
+  <div class="rung">
+    <h4><span style="background:var(--amber-soft);color:var(--amber)">PUSH 1</span>After the elder hour</h4>
+    <ul>
+      <li>Assistant answers cite trusted, approved Kachin</li>
+      <li>Numerals data exists → local model builds T03 number reading</li>
+      <li>Termbank becomes the seed of a real community dictionary</li>
+    </ul>
+  </div>
+  <div class="rung">
+    <h4><span style="background:var(--amber-soft);color:var(--amber)">PUSH 2</span>After the ONNX upload</h4>
+    <ul>
+      <li>Anyone on earth opens a link and hears Kachin — no install</li>
+      <li>Your domain finally has something worth pointing at</li>
+      <li>Strongest possible show-piece for the college &amp; reviewers</li>
+    </ul>
+  </div>
+  <div class="rung">
+    <h4><span style="background:var(--amber-soft);color:var(--amber)">PUSH 3</span>After 60 min of recordings</h4>
+    <ul>
+      <li>Fine-tune runs on a free Colab GPU (runbook pinned)</li>
+      <li>Voice v2: your community's sound, one-line swap into the engine</li>
+      <li>Blind listening scores prove it honestly — both numbers published</li>
+    </ul>
+  </div>
+</div>
+
+<div class="foot">Local map for Dan · matches the published repo state (July 20, 2026) · every green box is backed by a passing test, not a promise. Repo: github.com/DanSengAwng/kachin-gpt</div>
+</div>
+
+<!-- detail panel -->
+<div id="panel">
+  <button class="close" onclick="closePanel()">✕</button>
+  <h4 id="p-title"></h4>
+  <div class="chips" id="p-chips"></div>
+  <div class="path" id="p-path"></div>
+  <div class="sec">WHAT IT IS</div>
+  <p class="body" id="p-desc"></p>
+  <div class="sec">HOW TO PUSH IT FORWARD</div>
+  <div class="pushp" id="p-push"></div>
+</div>
+
+<script>
+const INFO = {
+  you:      { t:"You / any speaker", s:"people", who:"Community", path:"—",
+    d:"Anyone who can type Kachin. No account, no internet needed once installed. The whole point of the project is that this person hears their language.",
+    p:"Nothing to do — this is who we serve.", done:true },
+  normalize:{ t:"Number reader", s:"future", who:"Local model (T03), after the elder hour (H01)", path:"app/normalize.py (to be created)",
+    d:"Will turn digits like \"25\" into spoken Kachin words — but ONLY using numeral words an elder has approved. If it doesn't know a number, it says so honestly instead of guessing. Its acceptance test already exists, switched off, waiting.",
+    p:"Blocked on PUSH 1: collect numeral spoken forms from an elder. Then any local model can build it against the waiting test." },
+  guard:    { t:"Spell-guard", s:"built", who:"Automatic", path:"app/kachin_tts.py · unsupported_chars()",
+    d:"The voice model silently skips letters it doesn't know — dangerous for scripture. This guard checks every character first and warns you exactly which ones would be dropped, before any audio is made.",
+    p:"Done and tested. Gets more valuable as more text flows through.", done:true },
+  engine:   { t:"Voice engine", s:"built", who:"Automatic · Meta's open MMS model", path:"app/kachin_tts.py · speak()",
+    d:"The heart. One of the only neural voices ever trained on Kachin. It reads text EXACTLY as written — by design no AI can rewrite what it speaks. Runs on a normal laptop, offline after first download.",
+    p:"Done, tested, verified. Improves automatically when Voice v2 lands (one-line swap).", done:true },
+  audio:    { t:"Audio out", s:"built", who:"Automatic", path:"16 kHz WAV",
+    d:"Standard audio you can play anywhere, save, or send on WhatsApp.",
+    p:"Done.", done:true },
+  app:      { t:"Desktop app", s:"built", who:"You run: python app/app.py", path:"app/app.py",
+    d:"The simple one-box interface: paste text, press speak, listen. Warm-up happens at launch so the first sentence is fast.",
+    p:"Done. Use it in the college demo.", done:true },
+  batch:    { t:"Batch converter", s:"built", who:"You run: python tools/speak_file.py", path:"tools/speak_file.py",
+    d:"Feed it a whole document, get back audio files with natural pauses between paragraphs. Built for the college: lesson texts → listening material.",
+    p:"Done. Try it on a real lesson text before the presentation.", done:true },
+  onnx:     { t:"Model converter", s:"wait", who:"YOU · ~15 min + upload (H03)", path:"web/convert_to_onnx.sh → HF: DanSengAwng/mms-tts-kac-onnx",
+    d:"A one-time script that repackages the voice so web browsers can run it. The web app is already live and wired to look for this converted model — it just doesn't exist on the Hub yet.",
+    p:"PUSH 2. Run the script on your PC, upload the output folder to Hugging Face. The moment it's up, the public demo speaks Kachin." },
+  webdemo:  { t:"Public web demo", s:"wait", who:"Anyone with the link", path:"dansengawng.github.io/kachin-gpt/web/",
+    d:"Runs the voice entirely inside the visitor's browser — no server, no cost, works offline after first load. Currently proves the pipeline with an English test voice until the Kachin conversion is uploaded.",
+    p:"Unblocked by PUSH 2 (ONNX upload). Then point your domain at it (H05)." },
+  learner:  { t:"Fine-tuners & students", s:"people", who:"Community", path:"studio chat · localhost:8000",
+    d:"The people building the dataset and learning the tools. They ask the assistant questions and get answers grounded in the termbank — with honest 'not verified yet' labels.",
+    p:"Give them the studio link once you start recording sessions.", done:true },
+  termbank: { t:"Termbank", s:"wait", who:"Community writes · elder verifies", path:"termbank/termbank.csv · 13 seed rows",
+    d:"The community dictionary: Kachin term, English meaning, domain, notes, and a 'verified' flag. The flag is the whole trust system — no AI is ever allowed to set it to true.",
+    p:"PUSH 1: one sitting with an elder verifies the 13 seeds and adds numerals. Every verified row makes the assistant smarter and safer." },
+  retrieve: { t:"Retrieval (BM25)", s:"built", who:"Automatic", path:"rag/retrieve.py",
+    d:"When someone asks a question, this finds the most relevant dictionary rows — transparent keyword math, not a black box. Elder-approved rows deliberately outrank unreviewed ones.",
+    p:"Done and tested. T01 (local model task) wires it into the assistant's prompts.", done:true },
+  assistant:{ t:"Local assistant", s:"built", who:"Ollama on your PC · free, offline", path:"llm/ollama_client.py · OLLAMA_MODEL env",
+    d:"Drafts explanations and answers grounded ONLY on retrieved termbank rows and computed progress numbers. Never invents Kachin. If Ollama is off, everything else still works.",
+    p:"Working. T01 upgrades it: per-question retrieval with unverified rows clearly labeled — a local model can ship that tonight.", done:true },
+  gate:     { t:"Native-speaker gate", s:"wait", who:"HUMANS ONLY — an elder or fluent speaker (H01)", path:"the verified column + reviewer note",
+    d:"The single most important box on this page. Machine-drafted Kachin stays 'unverified' forever until a real person approves it. This is what makes the project honest enough for a theological college.",
+    p:"PUSH 1. Schedule one hour with an elder. Their approvals flow back into the termbank as VERIFIED and light up the whole Words line." },
+  actor:    { t:"Voice actor", s:"people", who:"Your recruit — recording now", path:"—",
+    d:"Records the sentences that will teach the model your community's sound. The kit gives them a session guide and a consent form in both languages.",
+    p:"Keep them going — aim for clean, quiet-room recordings. The studio will grade every file automatically.", done:true },
+  kit:      { t:"Recording kit", s:"built", who:"You + voice actor", path:"sft/recording-kit/",
+    d:"Everything for an afternoon session: workflow guide, bilingual consent template (with slots for the Kachin translation — deliberately not machine-written), and a quality checker that PASSes or FAILs each WAV with reasons.",
+    p:"Done. Print the consent form before the first session.", done:true },
+  studio:   { t:"Fine-tuning studio", s:"built", who:"You run: uvicorn studio.server:app", path:"studio/ · localhost:8000",
+    d:"A local web page: drag recordings in, it checks quality, files them under the right speaker, tracks minutes toward the 60-minute goal, and has the grounded chat beside it. Nothing ever leaves the machine.",
+    p:"Done and verified end-to-end. Start feeding it the actor's files (PUSH 3).", done:true },
+  corpus:   { t:"Voice corpus", s:"wait", who:"Built from recordings · consent-gated", path:"studio/corpus/ · gitignored, never uploaded",
+    d:"The growing pile of approved recordings + exact transcripts. It is the fuel for fine-tuning. Privacy is structural: the folder is blocked from ever being committed or uploaded.",
+    p:"PUSH 3. Every session moves the 0/60-minute bar. Two speakers minimum for a robust voice." },
+  finetune: { t:"Fine-tune run", s:"future", who:"You + free Colab GPU (H04)", path:"sft/RUNBOOK.md",
+    d:"A 2–4 hour training run that teaches the voice your speakers' sound. The exact procedure is pinned in the runbook — honestly marked 'not yet executed' until the first real run.",
+    p:"Unlocks automatically when the corpus hits target. Follow the runbook; it ends with a blind listening test, not a vibe check." },
+  tuned:    { t:"Community voice v2", s:"future", who:"Everyone, through every surface above", path:"one string change in app/kachin_tts.py",
+    d:"The payoff of the Voice line: the same engine, but sounding like your community. It only 'wins' if native listeners score it above the original in a blind test — both numbers get published either way.",
+    p:"Arrives via PUSH 3 → fine-tune. No code changes needed anywhere else." },
+  tests:    { t:"36 tests + CI", s:"built", who:"GitHub runs them on every commit", path:"tests/ · .github/workflows/ci.yml",
+    d:"30 passing tests guard everything green on this page. 6 more are 'goalposts' — written for future tasks and switched off, so finishing a task literally means turning its test on and making it pass.",
+    p:"Nothing — it guards you for free, 41 green runs so far.", done:true },
+  verify:   { t:"14 claim-checks", s:"built", who:"python verify_phase1.py --fast", path:"verify_phase1.py",
+    d:"A script that re-proves every claim the README makes. If the repo says it, this checks it.",
+    p:"Run it any time you doubt the state of things.", done:true },
+  invariants:{ t:"8 unbreakable rules", s:"built", who:"Everyone — human or AI", path:"BLUEPRINT.md",
+    d:"Verbatim speech is sacred · only natives verify · never fabricate Kachin · corpus stays local · verify before claim · respect the non-commercial license · keep tests fast · report only computed numbers.",
+    p:"Read them once — then let the tests enforce them.", done:true },
+  loop:     { t:"Agent loop", s:"built", who:"Your local Ollama model", path:"AGENT_LOOP.md + BACKLOG.md",
+    d:"The protocol that lets a cheap local model work safely: pick one specced task, switch on its waiting test, make the smallest change that passes everything, commit. Judgment lives in the tests, not the model.",
+    p:"PUSH 4. Open the repo in your local agent and say: 'Read AGENT_LOOP.md, do the next local-ok task from BACKLOG.md.'", done:true },
+};
+
+const EDGES = [
+  ["you","guard","g"], ["normalize","guard","gd"], ["guard","engine","g"],
+  ["engine","audio","g","exactly as written"], ["audio","app","g"], ["audio","batch","g"],
+  ["engine","onnx","ad","convert once"], ["onnx","webdemo","ad"],
+  ["learner","retrieve","a"], ["termbank","retrieve","a"], ["retrieve","assistant","a"],
+  ["assistant","gate","a","drafts, clearly labeled"], ["gate","termbank","a","approved → VERIFIED"],
+  ["termbank","normalize","ad","elder numerals"],
+  ["actor","kit","r"], ["kit","studio","r"], ["studio","corpus","r","never leaves your PC"],
+  ["corpus","finetune","rd"], ["finetune","tuned","rd"], ["tuned","engine","rd","one-line swap"],
+];
+const COLORS = { g:"#1a7f37", a:"#a06a00", r:"#b04a2f" };
+
+function el(id){ return document.getElementById("n-"+id); }
+const svg = document.getElementById("wires");
+const map = document.getElementById("map");
+
+function draw(){
+  const mr = map.getBoundingClientRect();
+  svg.setAttribute("width", map.scrollWidth);
+  svg.setAttribute("height", map.scrollHeight);
+  svg.style.height = map.scrollHeight+"px";
+  let defs = `<defs>`;
+  for (const k in COLORS) defs += `<marker id="ah-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLORS[k]}"/></marker>`;
+  defs += `</defs>`;
+  let out = defs;
+  for (const [f,t,style,label] of EDGES){
+    const a = el(f), b = el(t); if(!a||!b) continue;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const key = style[0], dashed = style.length>1;
+    let x1,y1,x2,y2,c1x,c1y,c2x,c2y;
+    const sameRow = Math.abs((ra.top+ra.height/2)-(rb.top+rb.height/2)) < ra.height;
+    if (sameRow && rb.left >= ra.right){            // forward, same row
+      x1=ra.right-mr.left; y1=ra.top+ra.height/2-mr.top;
+      x2=rb.left-mr.left;  y2=rb.top+rb.height/2-mr.top;
+      const dx=Math.max(24,(x2-x1)/2); c1x=x1+dx; c1y=y1; c2x=x2-dx; c2y=y2;
+    } else if (sameRow && ra.left > rb.right){      // backward, same row → arc below
+      x1=ra.left+ra.width/2-mr.left; y1=ra.bottom-mr.top;
+      x2=rb.left+rb.width/2-mr.left; y2=rb.bottom-mr.top;
+      c1x=x1; c1y=y1+46; c2x=x2; c2y=y2+46;
+    } else if (rb.top > ra.bottom){                 // downward
+      x1=ra.left+ra.width/2-mr.left; y1=ra.bottom-mr.top;
+      x2=rb.left+rb.width/2-mr.left; y2=rb.top-mr.top;
+      const dy=Math.max(26,(y2-y1)/2); c1x=x1; c1y=y1+dy; c2x=x2; c2y=y2-dy;
+    } else {                                        // upward (cross-band back to engine etc.)
+      x1=ra.left+ra.width/2-mr.left; y1=ra.top-mr.top;
+      x2=rb.left+rb.width/2-mr.left; y2=rb.bottom-mr.top;
+      const dy=Math.max(30,(y1-y2)/2); c1x=x1; c1y=y1-dy; c2x=x2; c2y=y2+dy;
+    }
+    const d = `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`;
+    out += `<path d="${d}" fill="none" stroke="${COLORS[key]}" stroke-width="2.2" opacity="0.85" ${dashed?'stroke-dasharray="6 5"':''} marker-end="url(#ah-${key})"/>`;
+    if (label){
+      const mx=(x1+x2)/2, my=(y1+y2)/2 + ((c1y>y1)?30:-7);
+      out += `<text x="${mx}" y="${my}" text-anchor="middle" class="arrowlbl" style="paint-order:stroke;stroke:#faf8f4;stroke-width:4px;font-size:10.5px;fill:${COLORS[key]};font-weight:600">${label}</text>`;
+    }
+  }
+  svg.innerHTML = out;
+}
+
+const CHIP = {
+  built:  ['BUILT & TESTED','#1a7f37','#e4f3e8'],
+  wait:   ['WAITING ON A PERSON','#a06a00','#fdf2d7'],
+  future: ['FUTURE — SPECCED','#6d7480','#eeeeea'],
+  people: ['PEOPLE','#0b62c4','#e6f0fb'],
+};
+let selected = null;
+function openPanel(id){
+  const n = INFO[id]; if(!n) return;
+  document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel'));
+  const card = el(id); if (card && card.classList.contains('node')) card.classList.add('sel');
+  selected = id;
+  const ic = (card && card.querySelector('.ico')) ? card.querySelector('.ico').textContent : '🔹';
+  document.getElementById('p-title').textContent = ic+" "+n.t;
+  const st = CHIP[n.s==='wait'?'wait':(n.s)] || CHIP.built;
+  document.getElementById('p-chips').innerHTML =
+    `<span class="pc" style="color:${st[1]};background:${st[2]}">${st[0]}</span>`+
+    `<span class="pc" style="color:#555;background:#f0ede6">WHO: ${n.who}</span>`;
+  document.getElementById('p-path').textContent = n.path;
+  document.getElementById('p-desc').textContent = n.d;
+  const pp = document.getElementById('p-push');
+  pp.textContent = n.p; pp.className = 'pushp'+(n.done?' done':'');
+  document.getElementById('panel').classList.add('open');
+}
+function closePanel(){
+  document.getElementById('panel').classList.remove('open');
+  document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel'));
+}
+document.querySelectorAll('.node,.rail').forEach(c=>{
+  c.addEventListener('click', ()=> openPanel(c.id.replace(/^n-/,'')));
+});
+document.querySelectorAll('.push').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    const id = c.dataset.node;
+    const card = el(id);
+    if (card) card.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(()=>openPanel(id), 350);
+  });
+});
+window.addEventListener('resize', draw);
+window.addEventListener('load', ()=>{ draw(); setTimeout(draw, 300); });
+</script>
+</body>
+</html>
